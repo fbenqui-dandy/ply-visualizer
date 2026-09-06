@@ -1,6 +1,19 @@
 import * as THREE from 'three';
 import { SpatialData } from './interfaces';
 
+/** Materials whose `wireframe`/`opacity` the render-mode toggles may drive. */
+type WireframeableMaterial = THREE.Material & { wireframe: boolean };
+
+/**
+ * Mesh materials all carry `wireframe`, but it lives on the concrete
+ * subclasses rather than on THREE.Material. Feature-test instead of listing
+ * classes: the previous Basic|Lambert list silently stopped working the moment
+ * a mesh arrived as Phong (createMaterialForFile, and MTLLoader's default).
+ */
+function supportsWireframe(material: THREE.Material): material is WireframeableMaterial {
+  return typeof (material as Partial<WireframeableMaterial>).wireframe === 'boolean';
+}
+
 /**
  * Per-file solid/wireframe/points/normals render-mode toggles and the mesh
  * visibility/material updates they drive.
@@ -211,10 +224,7 @@ export function updateMeshVisibilityAndMaterial(host: RenderModeHost, fileIndex:
       subMeshes.forEach(subMesh => {
         if (subMesh instanceof THREE.Mesh && subMesh.material) {
           const material = subMesh.material as THREE.Material;
-          if (
-            material instanceof THREE.MeshBasicMaterial ||
-            material instanceof THREE.MeshLambertMaterial
-          ) {
+          if (supportsWireframe(material)) {
             material.wireframe = wireframeVisible && !solidVisible;
             material.opacity = 1.0;
             material.transparent = false;
@@ -227,19 +237,13 @@ export function updateMeshVisibilityAndMaterial(host: RenderModeHost, fileIndex:
     const meshWithMaterial = mesh as THREE.Mesh;
     if (Array.isArray(meshWithMaterial.material)) {
       meshWithMaterial.material.forEach(material => {
-        if (
-          material instanceof THREE.MeshBasicMaterial ||
-          material instanceof THREE.MeshLambertMaterial
-        ) {
+        if (supportsWireframe(material)) {
           material.wireframe = wireframeVisible && !solidVisible;
           material.opacity = 1.0;
           material.transparent = false;
         }
       });
-    } else if (
-      meshWithMaterial.material instanceof THREE.MeshBasicMaterial ||
-      meshWithMaterial.material instanceof THREE.MeshLambertMaterial
-    ) {
+    } else if (supportsWireframe(meshWithMaterial.material)) {
       meshWithMaterial.material.wireframe = wireframeVisible && !solidVisible;
       meshWithMaterial.material.opacity = 1.0;
       meshWithMaterial.material.transparent = false;

@@ -709,6 +709,10 @@ class PointCloudVisualizer {
       FIXED_CAMERA_FAR
     );
     this.camera.position.set(1, 1, 1);
+    // The "normal" lighting mode hangs its key and fill lights off the camera
+    // (MeshLab-style headlight), and a light only contributes if its ancestor
+    // chain reaches the rendered scene - so the camera has to be in the graph.
+    this.scene.add(this.camera);
 
     // Initialize last camera state for change detection
     this.lastCameraPosition.copy(this.camera.position);
@@ -949,14 +953,12 @@ class PointCloudVisualizer {
   }
 
   private initSceneLighting(): void {
-    // Remove existing lights
-    const lightsToRemove = this.scene.children.filter(
-      child =>
-        child instanceof THREE.AmbientLight ||
-        child instanceof THREE.DirectionalLight ||
-        child instanceof THREE.HemisphereLight
-    );
-    lightsToRemove.forEach(light => this.scene.remove(light));
+    // Remove existing lights. Normal mode parents its lights to the camera, so
+    // both holders have to be swept or every mode switch stacks another set.
+    for (const holder of [this.scene, this.camera] as THREE.Object3D[]) {
+      const lightsToRemove = holder.children.filter(child => (child as THREE.Light).isLight);
+      lightsToRemove.forEach(light => holder.remove(light));
+    }
 
     // Add fresh lighting based on mode
     if (this.useFlatLighting) {
@@ -965,14 +967,23 @@ class PointCloudVisualizer {
       const hemi = new THREE.HemisphereLight(0xffffff, 0x888888, 0.6);
       this.scene.add(hemi);
     } else {
-      const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
-      this.scene.add(ambientLight);
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-      directionalLight.position.set(10, 10, 5);
-      directionalLight.castShadow = true;
-      directionalLight.shadow.mapSize.width = 2048;
-      directionalLight.shadow.mapSize.height = 2048;
-      this.scene.add(directionalLight);
+      // MeshLab-style headlight: the key light rides the camera, so rotating
+      // the model never swings a face out of the light and into near-black
+      // ambient. A world-fixed light made half of every orbit unreadable.
+      const keyLight = new THREE.DirectionalLight(0xffffff, 0.9);
+      keyLight.position.set(0, 0, 1);
+      this.camera.add(keyLight);
+
+      // Weaker off-axis fill so silhouettes and cavities keep some shape
+      // instead of collapsing to the ambient floor.
+      const fillLight = new THREE.DirectionalLight(0xffffff, 0.35);
+      fillLight.position.set(-0.5, 0.5, 0.4);
+      this.camera.add(fillLight);
+
+      // Sky/ground ambient: back faces stay legible but clearly darker than
+      // lit ones. Flat AmbientLight(0x404040, 0.6) was ~0.15 luminance - black.
+      const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.5);
+      this.scene.add(hemi);
     }
 
     // Ensure initial UI states reflect current settings
@@ -2688,19 +2699,21 @@ class PointCloudVisualizer {
 
     if (data.faceCount > 0) {
       // Mesh material
-      const material: THREE.MeshBasicMaterial | THREE.MeshLambertMaterial =
+      const material: THREE.MeshBasicMaterial | THREE.MeshPhongMaterial =
         // Slice planes and voxel boxes carry their presentation grey directly
         // in the vertex colours, so scene lighting must not tint them.
         this.useUnlitPly ||
         data.metadata?.volumeRenderMode === 'slices' ||
         data.metadata?.volumeRenderMode === 'voxels'
           ? new THREE.MeshBasicMaterial()
-          : new THREE.MeshLambertMaterial();
+          : // Phong, not Lambert: a modest specular highlight is most of what
+            // makes a surface read as a surface, and it maps closer to
+            // MeshLab's fixed-function model than MeshStandardMaterial (and is
+            // cheaper). Geometry without normals already gets smooth ones from
+            // MeshBuilder.createGeometryFromSpatialData, so nothing here needs
+            // to force faceting - flatShading did, for no reason.
+            new THREE.MeshPhongMaterial({ specular: 0x222222, shininess: 40 });
       material.side = THREE.DoubleSide; // More robust visibility if face winding varies
-      // For files without explicit normals, prefer flat shading to avoid odd gradients
-      if (material instanceof THREE.MeshLambertMaterial) {
-        material.flatShading = !data.hasNormals;
-      }
 
       if (this.shouldUseVertexColors(data, colorMode)) {
         material.vertexColors = true;
