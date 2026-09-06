@@ -8,6 +8,7 @@ import {
 import { filmState } from '../state/film.svelte';
 import { viewerState } from '../state/viewer.svelte';
 import { getBackgroundCssColor } from '../sceneBrightness';
+import { ORTHO_FOV } from '../visualization/pseudoOrtho';
 import type { ViewerRenderer } from '../rendering/viewerRenderer';
 
 declare const acquireVsCodeApi: () => any;
@@ -22,6 +23,12 @@ export interface FilmHost {
   vscode: { postMessage(message: any): void };
   requestRender(): void;
   showStatus(message: string): void;
+  /**
+   * Keyframes carry only fov, so playback has to re-derive the projection
+   * mode from it: pseudo-ortho also owns the point-size compensation and the
+   * clip range, neither of which is in the keyframe.
+   */
+  setPseudoOrthographic?(enabled: boolean): void;
 }
 
 interface SavedCameraPose {
@@ -262,6 +269,11 @@ export class FilmManager {
     c.up.copy(sample.up);
     c.lookAt(sample.target);
     if (c.fov !== sample.fov) {
+      // setPseudoOrthographic dollies the camera, so re-pose from the sample
+      // afterwards - the keyframe already holds the ortho-distance position.
+      this.host.setPseudoOrthographic?.(sample.fov <= ORTHO_FOV);
+      c.position.copy(sample.position);
+      c.lookAt(sample.target);
       c.fov = sample.fov;
       viewerState.cameraFov = sample.fov;
       c.updateProjectionMatrix();

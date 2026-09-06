@@ -16,6 +16,8 @@ export interface PointSizeScalingHost {
   spatialFiles: SpatialData[];
   poseGroups: THREE.Group[];
   materialMeshes: (THREE.Object3D[] | null)[];
+  /** See visualization/pseudoOrtho.ts; exactly 1 outside pseudo-ortho mode. */
+  viewDollyFactor: number;
   requestRender(): void;
   showStatus(message: string): void;
   applyTransformationMatrix(fileIndex: number): void;
@@ -24,13 +26,20 @@ export interface PointSizeScalingHost {
 /**
  * Set a world-space point size. The render path separately chooses square or
  * round sprites from its projected pixel size.
+ *
+ * Every point size in the viewer funnels through here so that the pseudo-ortho
+ * dolly can be compensated in one place: three.js size attenuation is
+ * `size * (height / 2) / -mvPosition.z` with no fov term, so parking the camera
+ * 44x further out shrinks every point 44x while the model's apparent size holds
+ * steady. Scaling here rather than rewriting pointSizes[] leaves the per-file
+ * sliders reading the value the user actually chose.
  */
-function setPointSize(
-  _host: PointSizeScalingHost,
+export function setPointSize(
+  host: { viewDollyFactor: number },
   material: THREE.PointsMaterial,
   size: number
 ): void {
-  material.size = size;
+  material.size = size * host.viewDollyFactor;
 }
 
 export function toggleScreenSpaceScaling(host: PointSizeScalingHost): void {
@@ -83,7 +92,11 @@ export function updateAllPointSizesForDistance(host: PointSizeScalingHost): void
     box.getCenter(sceneCenter);
   }
 
-  const cameraDistance = host.camera.position.distanceTo(sceneCenter);
+  // Undo the pseudo-ortho dolly first. calculateScreenSpacePointSize keys off
+  // absolute distance, so the raw ortho distance would peg every point at its
+  // 0.1x floor no matter how the view is framed.
+  const cameraDistance =
+    host.camera.position.distanceTo(sceneCenter) / Math.max(host.viewDollyFactor, 1e-9);
 
   // Apply distance-based scaling to all point materials
   host.meshes.forEach((mesh, index) => {

@@ -140,6 +140,17 @@ there; put code in the modules above.
   TrackballControls implementation, is the default. The CloudCompare-style
   virtual-ball "Trackball" scheme remains available under `T`; see the resolved
   rotation-direction post-mortem in docs/BACKLOG.md.
+- Orthographic view (`P`, Camera panel) is _pseudo_-ortho: a 2° fov with a
+  compensating dolly, not a real `OrthographicCamera`
+  (`engine/src/visualization/pseudoOrtho.ts`). `viewDollyFactor` is the single
+  source of truth for it — exactly 1 in perspective — and point sizes and the
+  legacy-trackball pan speed both derive from it, because three.js size
+  attenuation and `TrackballControls.panCamera` have no fov term. Never set
+  `PointsMaterial.size` directly; go through `pointSizeScaling.setPointSize`.
+  Any new code that assigns `camera.fov` itself must drop the mode first, or the
+  toggle starts lying: `clearPseudoOrthographic()` when that code places the
+  camera itself, `setPseudoOrthographic(false)` when it does not and the camera
+  needs dollying back in.
 - I've got a tiff/image viewing extension as well. Sometimes I add a prompt in
   the wrong window. Tell me.
 

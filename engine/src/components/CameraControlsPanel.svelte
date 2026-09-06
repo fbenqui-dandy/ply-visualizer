@@ -10,10 +10,24 @@
   }
 
   function setFov(newFov: number) {
+    // Blurring the text input re-commits whatever it shows, which in ortho mode
+    // is the 2° the panel is reporting - and that would leave ortho only to
+    // re-apply 2° as a perspective fov. A no-op commit must stay a no-op.
+    if (newFov === host.camera.fov) {
+      return;
+    }
+    // Changing fov by hand is a perspective gesture, so leave ortho properly -
+    // dollying back in - before applying it. Only clearing the flag would leave
+    // the camera parked ~44x out and shrink the model to nothing.
+    host.setPseudoOrthographic(false);
     host.camera.fov = newFov;
     host.camera.updateProjectionMatrix();
     viewerState.cameraFov = newFov;
     host.requestRender();
+  }
+
+  function onTogglePseudoOrtho() {
+    host.togglePseudoOrthographic();
   }
 
   function onFovSliderReset(e: MouseEvent) {
@@ -93,6 +107,14 @@
 </script>
 
 <div class="camera-controls-section">
+  <button
+    id="toggle-pseudo-ortho"
+    class="control-button"
+    class:active={viewerState.pseudoOrtho}
+    title="Approximate orthographic view: a 2° field of view with a compensating dolly, so parallel edges stay parallel. Residual convergence across the object is ~2°, which matters only for true orthographic measurement. Moving the Field of View slider returns to perspective."
+    onclick={onTogglePseudoOrtho}
+    >Orthographic Projection <span class="button-shortcut">P</span></button
+  >
   <label for="camera-fov" style="font-size:10px;">Field of View:</label><br />
   <input
     type="range"
@@ -104,7 +126,7 @@
     style="width:100%;margin:2px 0;"
     oninput={onFovSliderInput}
     ondblclick={onFovSliderReset}
-    title="Double-click to reset"
+    title="Double-click to reset. Moving this returns to perspective projection."
   />
   <input
     type="text"

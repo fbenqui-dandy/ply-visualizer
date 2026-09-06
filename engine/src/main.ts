@@ -107,6 +107,7 @@ import * as renderModeToggles from './renderModeToggles';
 import { SplatModeManager, handleSplatContainerUri } from './visualization/splatMode';
 import * as colorModeUtils from './colorMode';
 import * as pointSizeScaling from './pointSizeScaling';
+import * as pseudoOrtho from './visualization/pseudoOrtho';
 import * as depthPanelState from './depth/panelState';
 import * as sceneBrightness from './sceneBrightness';
 import * as depthDefaultSettings from './depth/defaultSettings';
@@ -131,7 +132,7 @@ import {
   shouldApplySavedViewConvention,
   shouldOrientZUp,
 } from './cameraOrientation';
-import { applyFixedClipPlanes, FIXED_CAMERA_FAR, FIXED_CAMERA_NEAR } from './cameraClipping';
+import { applyClipPlanesForView, FIXED_CAMERA_FAR, FIXED_CAMERA_NEAR } from './cameraClipping';
 import * as axesFeature from './axesFeature';
 import * as transformationMatrix from './transformationMatrix';
 import * as depthCameraParamsPrompt from './depthCameraParamsPrompt';
@@ -261,6 +262,12 @@ class PointCloudVisualizer {
   controlType: 'trackball' | 'orbit' | 'legacy-trackball' | 'arcball' = 'legacy-trackball';
   screenSpaceScaling: boolean = false;
   allowTransparency: boolean = false;
+
+  // Pseudo-orthographic projection: a very narrow fov plus a compensating
+  // dolly, rather than a real OrthographicCamera. See visualization/pseudoOrtho.
+  pseudoOrtho: boolean = false;
+  viewDollyFactor: number = 1;
+  perspectiveFov: number = pseudoOrtho.PERSPECTIVE_FOV;
 
   // Eye Dome Lighting (EDL) state
   // Auto is the default: the pass runs only while at least one visible point
@@ -596,6 +603,45 @@ class PointCloudVisualizer {
     pointSizeScaling.restoreOriginalPointSizes(this);
   }
 
+  /**
+   * Push pointSizes[] back onto every live material. Distinct from
+   * restoreOriginalPointSizes only in that it honours screen-space scaling
+   * when that mode is on.
+   */
+  refreshAllPointSizes(): void {
+    if (this.screenSpaceScaling) {
+      pointSizeScaling.updateAllPointSizesForDistance(this);
+    } else {
+      pointSizeScaling.restoreOriginalPointSizes(this);
+    }
+  }
+
+  setPseudoOrthographic(enabled: boolean): void {
+    if (enabled === this.pseudoOrtho) {
+      return;
+    }
+    pseudoOrtho.setPseudoOrthographic(this, enabled);
+    viewerState.pseudoOrtho = this.pseudoOrtho;
+    viewerState.cameraFov = this.camera.fov;
+    this.showStatus(enabled ? 'Orthographic projection (approximate)' : 'Perspective projection');
+  }
+
+  togglePseudoOrthographic(): void {
+    this.setPseudoOrthographic(!this.pseudoOrtho);
+  }
+
+  /**
+   * Drop out of ortho mode without moving the camera, for the paths that take
+   * ownership of the fov themselves (the fov slider, camera intrinsics).
+   */
+  clearPseudoOrthographic(): void {
+    if (!this.pseudoOrtho) {
+      return;
+    }
+    pseudoOrtho.clearPseudoOrthographic(this);
+    viewerState.pseudoOrtho = false;
+  }
+
   private createOptimizedPointCloud(
     geometry: THREE.BufferGeometry,
     material: THREE.PointsMaterial
@@ -703,7 +749,7 @@ class PointCloudVisualizer {
     }
 
     this.camera = new THREE.PerspectiveCamera(
-      75,
+      pseudoOrtho.PERSPECTIVE_FOV,
       container.clientWidth / container.clientHeight,
       FIXED_CAMERA_NEAR,
       FIXED_CAMERA_FAR
@@ -911,6 +957,11 @@ class PointCloudVisualizer {
       orbitControls.minDistance = 0.001;
       orbitControls.maxDistance = 50000; // Increased to match camera far plane
     }
+
+    // The branches above assign the hard-coded pan speed and distance limits
+    // from scratch, so a scheme switch while in pseudo-ortho would leave pan
+    // ~44x too fast and the dolly clamped well inside the current distance.
+    pseudoOrtho.applyPseudoOrthoControlTuning(this);
 
     // Set up axes visibility for all control types
     this.setupAxesVisibility();
@@ -1262,6 +1313,11 @@ class PointCloudVisualizer {
 
     // Only update camera matrix and UI when camera actually changes
     if (positionChanged || rotationChanged) {
+      // The pseudo-ortho depth range is derived from the viewing distance,
+      // which every wheel notch changes. Before the panel update, so the near/
+      // far readout is this frame's and not the previous one's.
+      pseudoOrtho.refreshPseudoOrthoClipPlanes(this);
+
       this.updateCameraMatrix();
       this.updateCameraControlsPanel();
 
@@ -1596,8 +1652,10 @@ class PointCloudVisualizer {
   }
 
   private resetCameraToDefault(): void {
-    // Reset FOV and camera orientation
-    this.camera.fov = 75;
+    // Reset FOV and camera orientation. Reset restores the default view, not
+    // the default projection - staying in ortho is what the toggle promises.
+    this.perspectiveFov = pseudoOrtho.PERSPECTIVE_FOV;
+    this.camera.fov = this.pseudoOrtho ? pseudoOrtho.ORTHO_FOV : this.perspectiveFov;
     this.camera.updateProjectionMatrix();
 
     // Reset quaternion to identity (no rotation)
@@ -1932,6 +1990,10 @@ class PointCloudVisualizer {
           this.switchToArcballControls();
           e.preventDefault();
           break;
+        case 'p':
+          this.togglePseudoOrthographic();
+          e.preventDefault();
+          break;
         // Arcball settings bindings
         case 'x':
           this.setUpVector(new THREE.Vector3(1, 0, 0));
@@ -2083,12 +2145,14 @@ class PointCloudVisualizer {
       // Move camera along its current direction to the new distance
       const dir = this.camera.getWorldDirection(new THREE.Vector3()).normalize();
       this.camera.position.copy(center.clone().sub(dir.multiplyScalar(distance)));
-      applyFixedClipPlanes(this.camera);
 
       // Update controls target if present
       if (this.controls && (this.controls as any).target) {
         (this.controls as any).target.copy(center);
       }
+
+      // After the target, so pseudo-ortho can derive its range from the pivot.
+      applyClipPlanesForView(this.camera, this.pseudoOrtho, distance);
     }
   }
 
@@ -2743,7 +2807,7 @@ class PointCloudVisualizer {
         filesState.pointSizes[fileIndex] = DEFAULT_POINT_SIZE;
       }
 
-      material.size = this.pointSizes[fileIndex];
+      pointSizeScaling.setPointSize(this, material, this.pointSizes[fileIndex]);
       material.sizeAttenuation = true; // Always use distance-based scaling
 
       // Apply point count-based optimizations
@@ -2850,7 +2914,10 @@ class PointCloudVisualizer {
     this.camera.position.copy(center.clone().sub(direction.multiplyScalar(distance)));
     this.camera.lookAt(center);
 
-    applyFixedClipPlanes(this.camera);
+    // In pseudo-ortho the clip range tracks the viewing distance rather than
+    // using the permissive fixed one; at ~44x the pivot distance a near plane
+    // of 0.001 leaves coplanar faces z-fighting.
+    applyClipPlanesForView(this.camera, this.pseudoOrtho, distance);
 
     // Set rotation center to fitted center
     this.controls.target.copy(center);
@@ -3443,7 +3510,6 @@ class PointCloudVisualizer {
 
                 const pointMaterial = new THREE.PointsMaterial({
                   color: 0xff0000, // Default red - will be colored by MTL
-                  size: this.pointSizes[data.fileIndex] || 0.001, // Use stored point size (world units)
                   sizeAttenuation: true, // Use world-space sizing like other file types
                   // Apply transparency settings
                   transparent: this.allowTransparency,
@@ -3453,6 +3519,11 @@ class PointCloudVisualizer {
                   depthTest: true,
                   side: THREE.DoubleSide,
                 });
+                pointSizeScaling.setPointSize(
+                  this,
+                  pointMaterial,
+                  this.pointSizes[data.fileIndex] || DEFAULT_POINT_SIZE
+                );
 
                 const points = new THREE.Points(pointGeometry, pointMaterial);
                 (points as any).materialName = materialGroup.material;

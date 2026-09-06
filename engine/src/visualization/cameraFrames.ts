@@ -64,6 +64,12 @@ export interface LookThroughHost {
   requestRender(): void;
   updateCameraMatrix?(): void;
   updateCameraControlsPanel?(): void;
+  /**
+   * Looking through a real camera means adopting its intrinsics, fov included,
+   * so it has to leave pseudo-orthographic mode - otherwise the toggle would
+   * claim a projection the camera no longer has.
+   */
+  clearPseudoOrthographic?(): void;
 }
 
 /** Distance of the look-at target for frames that do not declare a view. */
@@ -156,6 +162,7 @@ export function lookThroughCameraFrame(host: LookThroughHost, group: THREE.Group
   host.camera.up.copy(up);
   host.camera.lookAt(target);
   if (view?.fovYDegrees && Number.isFinite(view.fovYDegrees)) {
+    host.clearPseudoOrthographic?.();
     host.camera.fov = view.fovYDegrees;
   }
   host.camera.updateProjectionMatrix();
@@ -211,6 +218,7 @@ function fitFieldOfViewToImage(
     return;
   }
   // A little air so the border is not exactly on the viewport edge.
+  host.clearPseudoOrthographic?.();
   host.camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(tangent * 1.04));
   host.camera.updateProjectionMatrix();
 }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { SpatialData } from './interfaces';
+import { setPointSize } from './pointSizeScaling';
 
 /** Materials whose `wireframe`/`opacity` the render-mode toggles may drive. */
 type WireframeableMaterial = THREE.Material & { wireframe: boolean };
@@ -31,6 +32,8 @@ export interface RenderModeHost {
   normalsVisualizers: (THREE.LineSegments | null)[];
   fileVisibility: boolean[];
   pointSizes: number[];
+  /** See visualization/pseudoOrtho.ts; exactly 1 outside pseudo-ortho mode. */
+  viewDollyFactor: number;
   allowTransparency: boolean;
   scene: THREE.Scene;
   /** Present on the full visualizer host; drives the per-file splat mode. */
@@ -280,7 +283,7 @@ export function updateVertexPointsVisualization(
     vertexPointsObject.visible = shouldShowVertexPoints;
     // Update point size from slider
     if (vertexPointsObject.material instanceof THREE.PointsMaterial) {
-      vertexPointsObject.material.size = host.pointSizes[fileIndex] || 1.0;
+      setPointSize(host, vertexPointsObject.material, host.pointSizes[fileIndex] || 1.0);
     }
   }
 }
@@ -320,7 +323,6 @@ export function createVertexPointsFromMesh(
   // Create point material with current point size
   const currentPointSize = host.pointSizes[fileIndex] || 1.0;
   const pointsMaterial = new THREE.PointsMaterial({
-    size: currentPointSize,
     vertexColors: geometry.attributes.color ? true : false,
     color: geometry.attributes.color ? undefined : 0x888888,
     sizeAttenuation: true,
@@ -332,6 +334,7 @@ export function createVertexPointsFromMesh(
     depthTest: true,
     side: THREE.FrontSide,
   });
+  setPointSize(host, pointsMaterial, currentPointSize);
 
   const points = new THREE.Points(pointsGeometry, pointsMaterial);
   points.name = 'Vertex Points';

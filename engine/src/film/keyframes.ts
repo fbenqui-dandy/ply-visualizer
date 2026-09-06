@@ -93,6 +93,24 @@ function segmentEase(u: number, easeIn: boolean, easeOut: boolean): number {
   return u;
 }
 
+/**
+ * A projection change is a cut, not a move.
+ *
+ * Pseudo-ortho parks the camera ~44x further from the pivot at a 2 degree fov
+ * (visualization/pseudoOrtho.ts). Blending across that boundary interpolates
+ * the dolly and the fov independently, and because apparent size goes as
+ * 1 / (distance * tan(fov / 2)) the two do not cancel: the object swells or
+ * vanishes mid-segment. Holding the outgoing pose and then cutting is the
+ * honest reading of a segment whose endpoints do not share a projection.
+ */
+const PROJECTION_CUT_FOV = 5;
+
+function straddlesProjectionModes(a: CameraKeyframe, b: CameraKeyframe): boolean {
+  const aIsOrtho = a.fov < PROJECTION_CUT_FOV;
+  const bIsOrtho = b.fov < PROJECTION_CUT_FOV;
+  return aIsOrtho !== bIsOrtho;
+}
+
 function keyframePose(key: CameraKeyframe): TimelineSample {
   const q = new THREE.Quaternion().fromArray(key.quaternion);
   return {
@@ -194,6 +212,9 @@ export function sampleTimeline(
       const easeIn = keyframes[i].dwell > 0 || (i === 0 && !loop);
       const easeOut = keyframes[j].dwell > 0 || (!loop && j === n - 1);
       const u = segmentEase(remaining / duration, easeIn, easeOut);
+      if (straddlesProjectionModes(keyframes[i], keyframes[j])) {
+        return keyframePose(u < 0.5 ? keyframes[i] : keyframes[j]);
+      }
       const qa = new THREE.Quaternion().fromArray(keyframes[i].quaternion);
       const qb = new THREE.Quaternion().fromArray(keyframes[j].quaternion);
       const q = qa.slerp(qb, u);

@@ -51,6 +51,12 @@ export function shouldApplySavedViewConvention(
 export interface SceneUpHost {
   camera: THREE.PerspectiveCamera;
   controls?: { target: THREE.Vector3; worldUp?: THREE.Vector3; update?: () => void } | null;
+  /**
+   * Pseudo-ortho needs a large pivot distance to work (see
+   * visualization/pseudoOrtho.ts); the scanner start view deliberately stands
+   * 0.1 m off the capture point, which is incompatible with it.
+   */
+  clearPseudoOrthographic?(): void;
 }
 
 /** How far behind the capture origin the camera stands, in metres. */
@@ -127,6 +133,7 @@ export function applyScannerStartView(
   direction.normalize();
 
   applySceneUp(host);
+  host.clearPseudoOrthographic?.();
   // Pivot on the capture origin itself and stand just behind it, so orbiting
   // swings the view around the point the data was measured from rather than
   // around something out in the scene.

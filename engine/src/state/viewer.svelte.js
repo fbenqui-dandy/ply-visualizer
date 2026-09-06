@@ -20,6 +20,7 @@ export const viewerState = $state(
    *   backgroundBrightness: number;
    *   lightingMode: string;
    *   cameraFov: number;
+   *   pseudoOrtho: boolean;
    *   cameraNear: number;
    *   cameraFar: number;
    *   cameraPositionText: string;
@@ -39,6 +40,9 @@ export const viewerState = $state(
     // Phase 4 (CameraControlsPanel.svelte): updated every frame the camera
     // moves by transformationMatrix.ts's updateCameraControlsPanel().
     cameraFov: 75,
+    // Pseudo-orthographic projection: a very narrow fov plus a compensating
+    // dolly (visualization/pseudoOrtho.ts), not a real OrthographicCamera.
+    pseudoOrtho: false,
     // Must match the PerspectiveCamera constructor arguments in initThreeJS.
     cameraNear: 0.001,
     cameraFar: 10000000,

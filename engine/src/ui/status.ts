@@ -101,6 +101,7 @@ export function showKeyboardShortcuts(onCreateShortcutsUI: () => void): void {
   O: Switch to OrbitControls
   I: Switch to Legacy Trackball controls (delta-based, default)
   K: Switch to ArcballControls
+  P: Toggle orthographic projection (approximate)
   C: Set OpenCV camera convention (Y-down)
   B: Set OpenGL camera convention (Y-up)
   W: Set rotation center to world origin (0,0,0)
