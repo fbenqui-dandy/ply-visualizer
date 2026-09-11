@@ -92,22 +92,29 @@ export function switchTab(tabName: string | null): void {
 }
 
 export function showKeyboardShortcuts(onCreateShortcutsUI: () => void): void {
+  // Keep in sync with the switch in main.ts's keydown handler, and with
+  // docs/install-and-shortcuts.md.
   console.log(`Keyboard Shortcuts:
+  H: Show this list
+  F: Fit camera to all objects
+  R: Reset camera and up vector
+  P: Toggle orthographic projection (approximate)
+  A: Toggle coordinate axes
+  W: Set rotation center to world origin (0,0,0)
+  I: Switch to Legacy Trackball controls (delta-based, default)
+  T: Switch to Trackball controls (virtual ball)
+  O: Switch to OrbitControls
+  K: Switch to ArcballControls
+  L: Invert Arcball handedness
   X: Set X-up
   Y: Set Y-up (default)
   Z: Set Z-up (CAD style)
-  R: Reset camera and up vector
-  T: Switch to Trackball controls (virtual ball)
-  O: Switch to OrbitControls
-  I: Switch to Legacy Trackball controls (delta-based, default)
-  K: Switch to ArcballControls
-  P: Toggle orthographic projection (approximate)
-  C: Set OpenCV camera convention (Y-down)
   B: Set OpenGL camera convention (Y-up)
-  W: Set rotation center to world origin (0,0,0)
+  V: Set OpenCV camera convention (Y-down)
+  E: Cycle Eye-Dome Lighting (Auto -> All -> Off)
   G: Toggle gamma correction
   S: Toggle screen-space scaling (distance-based point sizes)
-  T: Toggle transparency (re-enable alpha blending)`);
+  U: Toggle transparency (re-enable alpha blending)`);
 
   // Create permanent shortcuts UI section
   onCreateShortcutsUI();
