@@ -2784,7 +2784,8 @@ class PointCloudVisualizer {
         material.color = new THREE.Color(1, 1, 1); // White base color
       } else if (colorMode === 'assigned') {
         // Use assigned color
-        const color = this.fileColors[fileIndex % this.fileColors.length];
+        const color =
+          this.fileColors[colorModeUtils.assignedColorIndex(fileIndex, this.fileColors.length)];
         material.color.setRGB(color[0], color[1], color[2]);
       } else {
         // Use color index
@@ -2821,7 +2822,8 @@ class PointCloudVisualizer {
         material.color = new THREE.Color(1, 1, 1); // White base color
       } else if (colorMode === 'assigned') {
         // Use assigned color
-        const color = this.fileColors[fileIndex % this.fileColors.length];
+        const color =
+          this.fileColors[colorModeUtils.assignedColorIndex(fileIndex, this.fileColors.length)];
         material.color.setRGB(color[0], color[1], color[2]);
       } else {
         // Use color index

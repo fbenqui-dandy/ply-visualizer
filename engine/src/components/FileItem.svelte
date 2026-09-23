@@ -2,6 +2,7 @@
   import { filesState } from '../state/files.svelte';
   import { runWithFileActivity } from '../fileActivity';
   import { getPointCloudColorOptions } from '../colorOptions';
+  import { assignedColorIndex } from '../colorMode';
   import { ensureKeyboardModifierTracking, isShiftPressed } from '../keyboardModifiers';
   import { getRenderModeOptions, hasRenderMode } from '../renderModeOptions';
   import CameraFrameList from './CameraFrameList.svelte';
@@ -103,7 +104,16 @@
       // Viridis-ish ramp for scalar-field modes.
       return 'background: linear-gradient(90deg, #440154, #31688e, #35b779, #fde725); border: 1px solid #666;';
     }
-    const color = host.fileColors[index % host.fileColors.length];
+    // An explicit palette choice shows that colour; 'assigned' (and anything
+    // else reaching here) shows the file's assigned slot. Keyed off the file
+    // index alone, the swatch stayed on the file's own colour after picking
+    // another one from the dropdown.
+    const explicit = Number.parseInt(colorMode ?? '', 10);
+    const paletteIndex =
+      Number.isInteger(explicit) && explicit >= 0 && explicit < host.fileColors.length
+        ? explicit
+        : assignedColorIndex(index, host.fileColors.length);
+    const color = host.fileColors[paletteIndex];
     const colorHex = `#${Math.round(color[0] * 255)
       .toString(16)
       .padStart(2, '0')}${Math.round(color[1] * 255)

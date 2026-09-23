@@ -1,5 +1,5 @@
 import type { SpatialData } from './interfaces';
-import { getColorName, getRecoloredColors } from './colorMode';
+import { assignedColorIndex, getColorName, getRecoloredColors } from './colorMode';
 import { getExtraScalarFieldNames } from './utils/scalarFields';
 
 export interface PointCloudColorOption {
@@ -48,7 +48,10 @@ export function getPointCloudColorOptions(
     );
   }
 
-  options.push({ value: 'assigned', label: `Assigned (${getColorName(fileIndex)})` });
+  options.push({
+    value: 'assigned',
+    label: `Assigned (${getColorName(assignedColorIndex(fileIndex, host.fileColors.length))})`,
+  });
   for (let colorIndex = 0; colorIndex < host.fileColors.length; colorIndex++) {
     options.push({ value: colorIndex.toString(), label: getColorName(colorIndex) });
   }

@@ -218,6 +218,31 @@ export interface FileColorsHost {
   individualColorModes: string[];
 }
 
+/**
+ * Whether a file's "assigned" colour cycles the palette by load order.
+ *
+ * Off: every file without colours of its own renders white. Cycling made an
+ * uncoloured file's colour depend on how many files happened to be loaded
+ * before it, so the same cloud came up white alone and red beside another —
+ * and telling clouds apart by colour is what the explicit per-file colour
+ * options are for.
+ *
+ * Set back to true to restore the white/red/green/... cycle; nothing else
+ * needs changing.
+ */
+const CYCLE_ASSIGNED_COLORS = false;
+
+/**
+ * Palette slot behind colour mode 'assigned'. The single place that decides
+ * it, so the swatch, the dropdown label and the material cannot disagree.
+ */
+export function assignedColorIndex(fileIndex: number, paletteLength: number): number {
+  if (!CYCLE_ASSIGNED_COLORS) {
+    return 0; // White, DEFAULT_COLORS.FILE_COLORS[0]
+  }
+  return paletteLength > 0 ? fileIndex % paletteLength : 0;
+}
+
 export function getColorName(fileIndex: number): string {
   const colorNames = [
     'White',
