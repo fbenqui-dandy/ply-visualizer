@@ -2939,6 +2939,14 @@ class PointCloudVisualizer {
     if (!capturePoint || !applyScannerStartView(this, capturePoint, this.meshes)) {
       if (shouldOrientZUp(this.spatialFiles)) {
         applyZUpOrientation(this);
+      } else {
+        // Square on, which is what R gives. fitCameraToAllObjects only slides
+        // along the direction the camera already has - deliberately, so that
+        // loading a second file never swings the view you set up on the first.
+        // On the first file there is no such view to protect, so without this
+        // the opening shot inherited the constructor's (1, 1, 1) placement and
+        // came out on the diagonal, and R was needed to straighten it.
+        this.camera.quaternion.set(0, 0, 0, 1);
       }
       this.fitCameraToAllObjects();
     }
